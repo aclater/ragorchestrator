@@ -1,7 +1,7 @@
 # ragorchestrator — LangGraph supervisor agent for ragpipe
 # UBI10 minimal, non-root, healthcheck defined
 
-FROM registry.access.redhat.com/ubi10/python-312:latest
+FROM registry.access.redhat.com/ubi10/python-312:1
 
 LABEL maintainer="aclater" \
       description="LangGraph supervisor agent for agentic RAG orchestration" \
