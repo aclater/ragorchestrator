@@ -11,7 +11,7 @@ import time
 import uuid
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from prometheus_client import Counter, Histogram, generate_latest
 
 from ragorchestrator import __version__
@@ -111,9 +111,24 @@ async def chat_completions(request: Request):
         else:
             lc_messages.append(HumanMessage(content=content))
 
+    stream = body.get("stream", False)
+    model_name = body.get("model", "ragorchestrator")
+
+    if stream:
+        if complexity == Complexity.SIMPLE:
+            return StreamingResponse(
+                _stream_simple_path(user_query, model_name, start),
+                media_type="text/event-stream",
+            )
+        else:
+            return StreamingResponse(
+                _stream_agentic_path(lc_messages, model_name, start),
+                media_type="text/event-stream",
+            )
+
     try:
         if complexity == Complexity.SIMPLE:
-            result = await _simple_path(user_query, body.get("model", "ragorchestrator"))
+            result = await _simple_path(user_query, model_name)
         else:
             result = await _agentic_path(lc_messages)
 
@@ -140,7 +155,7 @@ async def chat_completions(request: Request):
         response = {
             "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
             "object": "chat.completion",
-            "model": body.get("model", "ragorchestrator"),
+            "model": model_name,
             "choices": [
                 {
                     "index": 0,
@@ -161,6 +176,119 @@ async def chat_completions(request: Request):
         queries_total.labels(status="error").inc()
         log.exception("Query processing failed")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def _sse_chunk(chunk_id: str, model: str, content: str, finish_reason: str | None = None) -> str:
+    """Format a single SSE chunk in OpenAI streaming format."""
+    data = {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {"content": content} if content else {},
+                "finish_reason": finish_reason,
+            }
+        ],
+    }
+    return f"data: {json.dumps(data)}\n\n"
+
+
+async def _stream_simple_path(query: str, model: str, start: float):
+    """Stream SSE events by proxying ragpipe's streaming response."""
+    import httpx
+
+    ragpipe_url = os.environ.get("RAGPIPE_URL", "http://localhost:8090")
+    ragpipe_token = os.environ.get("RAGPIPE_ADMIN_TOKEN", "")
+
+    headers = {"Content-Type": "application/json"}
+    if ragpipe_token:
+        headers["Authorization"] = f"Bearer {ragpipe_token}"
+
+    payload = {
+        "model": "default",
+        "messages": [{"role": "user", "content": query}],
+        "temperature": 0,
+        "stream": True,
+    }
+
+    chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream(
+                "POST",
+                f"{ragpipe_url}/v1/chat/completions",
+                json=payload,
+                headers=headers,
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    payload_str = line[6:]
+                    if payload_str.strip() == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(payload_str)
+                        delta = data.get("choices", [{}])[0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            yield _sse_chunk(chunk_id, model, content)
+                    except json.JSONDecodeError:
+                        continue
+
+        elapsed = time.monotonic() - start
+        query_latency.observe(elapsed)
+        queries_total.labels(status="success").inc()
+    except Exception as e:
+        log.exception("Streaming simple path failed")
+        elapsed = time.monotonic() - start
+        query_latency.observe(elapsed)
+        queries_total.labels(status="error").inc()
+        yield _sse_chunk(chunk_id, model, f"\n\n[Error: {e}]")
+
+    yield _sse_chunk(chunk_id, model, "", finish_reason="stop")
+    yield "data: [DONE]\n\n"
+
+
+async def _stream_agentic_path(lc_messages: list, model: str, start: float):
+    """Run agentic graph, then stream the final content as SSE chunks."""
+    chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+
+    try:
+        graph = get_graph()
+        result = await graph.ainvoke({"messages": lc_messages})
+
+        # Count tool calls
+        for msg in result["messages"]:
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tool_calls_total.labels(tool=tc.get("name", "unknown")).inc()
+
+        final_msg = result["messages"][-1]
+        content = final_msg.content if hasattr(final_msg, "content") else str(final_msg)
+
+        # Emit content in word-sized chunks for a natural streaming feel
+        words = content.split(" ")
+        for i, word in enumerate(words):
+            token = word if i == 0 else f" {word}"
+            yield _sse_chunk(chunk_id, model, token)
+
+        elapsed = time.monotonic() - start
+        query_latency.observe(elapsed)
+        queries_total.labels(status="success").inc()
+        log.info("Streaming agentic path completed")
+    except Exception as e:
+        log.exception("Streaming agentic path failed")
+        elapsed = time.monotonic() - start
+        query_latency.observe(elapsed)
+        queries_total.labels(status="error").inc()
+        yield _sse_chunk(chunk_id, model, f"Error: {e}")
+
+    yield _sse_chunk(chunk_id, model, "", finish_reason="stop")
+    yield "data: [DONE]\n\n"
 
 
 async def _simple_path(query: str, model: str) -> dict:
