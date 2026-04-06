@@ -1,0 +1,2 @@
+# SC2086: Double quote to prevent globbing/splitting — intentional in sed
+disable=SC2086

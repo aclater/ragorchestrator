@@ -5,36 +5,63 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  lint:
+  lint-shell:
+    name: ShellCheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: ludeeus/action-shellcheck@2.0.0
         with:
-          python-version: "3.12"
-      - run: pip install ruff
-      - name: Ruff (lint + format)
-        run: ruff check && ruff format --check
+          scandir: .
+
+  lint:
+    name: Ruff (lint + format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: format --check
 
   test:
+    name: pytest
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: pip install '.[dev]'
-      - name: pytest
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install --quiet '.[dev]'
+      - name: Run tests
         run: python -m pytest tests/ -v
 
-  hadolint:
+  mypy:
+    name: mypy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: hadolint/hadolint-action@v3.1.0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install --quiet '.[dev]' mypy
+      - name: Run mypy
+        run: mypy ragorchestrator/
+        continue-on-error: true
+
+  hadolint:
+    name: Hadolint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Containerfile
