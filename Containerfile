@@ -1,7 +1,8 @@
 # ragorchestrator — LangGraph supervisor agent for ragpipe
-# UBI10 minimal, non-root, healthcheck defined
+# UBI9 Python 3.12, non-root, healthcheck defined
+# UBI10 does not yet publish python-312; using UBI9 until available
 
-FROM registry.access.redhat.com/ubi10/python-312:1
+FROM registry.access.redhat.com/ubi9/python-312@sha256:7ba356eca7f476bcf9a8c51714e43353376d37e0bbd4e43ceec7b1bcc6ff9675
 
 LABEL maintainer="aclater" \
       description="LangGraph supervisor agent for agentic RAG orchestration" \
@@ -11,8 +12,7 @@ LABEL maintainer="aclater" \
 WORKDIR /opt/app-root/src
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e '.[dev]' && \
-    pip install --no-cache-dir .
+RUN pip install --no-cache-dir .
 
 COPY ragorchestrator/ ragorchestrator/
 
