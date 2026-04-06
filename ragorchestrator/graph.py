@@ -19,12 +19,13 @@ Architecture:
 """
 
 import asyncio
+import json
 import logging
 import os
 from typing import Annotated, TypedDict
 
 import httpx
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
@@ -111,6 +112,22 @@ def _extract_question(messages) -> str:
         if isinstance(msg, HumanMessage):
             return msg.content
     return ""
+
+
+def _extract_grounding(messages) -> str | None:
+    """Extract grounding classification from the last ragpipe ToolMessage.
+
+    Returns 'corpus', 'general', 'mixed', 'unknown', or None if no
+    ragpipe tool response is found.
+    """
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage) and msg.name == "ragpipe_retrieval":
+            try:
+                data = json.loads(msg.content)
+                return data.get("grounding")
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return None
 
 
 def _build_tools():
@@ -228,6 +245,21 @@ async def reflect(state: AgentState) -> dict:
     generation = state.get("generation", "")
     documents = state.get("documents", [])
     loop_count = state.get("loop_count", 0)
+    messages = state.get("messages", [])
+
+    # Short-circuit: if ragpipe classified grounding as "general", there are
+    # no corpus documents to grade against — skip the hallucination LLM call
+    # and go directly to re-retrieval.
+    grounding = _extract_grounding(messages)
+    if grounding == "general":
+        log.info("Self-RAG: grounding=general — skipping hallucination grader, triggering re-retrieval")
+        if loop_count >= MAX_RETRIES:
+            log.info("Self-RAG: max retries reached on general grounding")
+            return {"loop_count": loop_count + 1}
+        return {
+            "loop_count": loop_count + 1,
+            "messages": [AIMessage(content="[Self-RAG] Ragpipe grounding=general (no corpus match), re-retrieving...")],
+        }
 
     hallucination = await grade_hallucination(question, documents, generation)
     log.info("Self-RAG reflection: hallucination=%s", hallucination.value)
