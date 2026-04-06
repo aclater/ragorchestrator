@@ -19,12 +19,13 @@ Architecture:
 """
 
 import asyncio
+import json
 import logging
 import os
 from typing import Annotated, TypedDict
 
 import httpx
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
@@ -223,11 +224,37 @@ def generate(state: AgentState) -> dict:
     return {"generation": generation, "loop_count": loop_count}
 
 
+def _extract_grounding(messages) -> str | None:
+    """Extract grounding classification from the last ragpipe ToolMessage."""
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage):
+            try:
+                data = json.loads(msg.content)
+                if "grounding" in data:
+                    return data["grounding"]
+            except (json.JSONDecodeError, TypeError):
+                continue
+    return None
+
+
 async def reflect(state: AgentState) -> dict:
     question = state.get("question", "")
     generation = state.get("generation", "")
     documents = state.get("documents", [])
     loop_count = state.get("loop_count", 0)
+
+    # Short-circuit: if ragpipe already classified as general knowledge,
+    # skip the hallucination grader LLM call and go straight to re-retrieval.
+    grounding = _extract_grounding(state.get("messages", []))
+    if grounding == "general":
+        log.info("Self-RAG: ragpipe grounding=general, skipping hallucination grader")
+        if loop_count >= MAX_RETRIES:
+            log.info("Self-RAG: max retries reached (grounding=general)")
+            return {"loop_count": loop_count + 1}
+        return {
+            "loop_count": loop_count + 1,
+            "messages": [AIMessage(content="[Self-RAG] Response does not address question, re-retrieving...")],
+        }
 
     hallucination = await grade_hallucination(question, documents, generation)
     log.info("Self-RAG reflection: hallucination=%s", hallucination.value)
