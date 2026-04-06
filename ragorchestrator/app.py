@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest
 
 from ragorchestrator import __version__
+from ragorchestrator.classifier import Complexity, classify
 from ragorchestrator.graph import get_graph
 
 log = logging.getLogger(__name__)
@@ -37,6 +38,11 @@ tool_calls_total = Counter(
     "ragorchestrator_tool_calls_total",
     "Total tool calls made by supervisor",
     ["tool"],
+)
+complexity_classified = Counter(
+    "ragorchestrator_complexity_classified_total",
+    "Total queries classified by complexity",
+    ["complexity"],
 )
 
 # ── App ──────────────────────────────────────────────────────────────────────
@@ -66,8 +72,9 @@ async def metrics():
 async def chat_completions(request: Request):
     """OpenAI-compatible chat completions endpoint.
 
-    Runs the query through the LangGraph supervisor graph, which
-    decides whether to call ragpipe, answer directly, or use other tools.
+    Runs the query through adaptive routing:
+    - SIMPLE queries: direct ragpipe call (fast path)
+    - COMPLEX/EXTERNAL queries: full LangGraph agentic loop
     """
     start = time.monotonic()
     body = await request.json()
@@ -75,6 +82,20 @@ async def chat_completions(request: Request):
     messages = body.get("messages", [])
     if not messages:
         return JSONResponse({"error": "No messages provided"}, status_code=400)
+
+    # Extract last user message for classification
+    user_query = None
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            user_query = msg.get("content", "")
+            break
+
+    if not user_query:
+        return JSONResponse({"error": "No user message found"}, status_code=400)
+
+    complexity = classify(user_query)
+    complexity_classified.labels(complexity=complexity.value).inc()
+    log.info("Query complexity: %s", complexity.value)
 
     # Convert to LangChain message format
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -91,8 +112,10 @@ async def chat_completions(request: Request):
             lc_messages.append(HumanMessage(content=content))
 
     try:
-        graph = get_graph()
-        result = await graph.ainvoke({"messages": lc_messages})
+        if complexity == Complexity.SIMPLE:
+            result = await _simple_path(user_query, body.get("model", "ragorchestrator"))
+        else:
+            result = await _agentic_path(lc_messages)
 
         # Extract final response
         final_msg = result["messages"][-1]
@@ -104,8 +127,11 @@ async def chat_completions(request: Request):
                 for tc in msg.tool_calls:
                     tool_calls_total.labels(tool=tc.get("name", "unknown")).inc()
 
-        # Extract rag_metadata from ragpipe tool response if available
-        rag_metadata = _extract_rag_metadata(result["messages"])
+        # Extract rag_metadata: simple path has it directly, agentic path extracts from messages
+        if complexity == Complexity.SIMPLE:
+            rag_metadata = result.get("rag_metadata")
+        else:
+            rag_metadata = _extract_rag_metadata(result["messages"])
 
         elapsed = time.monotonic() - start
         query_latency.observe(elapsed)
@@ -133,8 +159,68 @@ async def chat_completions(request: Request):
         elapsed = time.monotonic() - start
         query_latency.observe(elapsed)
         queries_total.labels(status="error").inc()
-        log.exception("Supervisor graph failed")
+        log.exception("Query processing failed")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def _simple_path(query: str, model: str) -> dict:
+    """Fast path: call ragpipe directly for simple queries.
+
+    Bypasses the full LangGraph agentic loop for speed.
+    Returns a result dict with messages list containing the response.
+    """
+    import httpx
+    from langchain_core.messages import AIMessage
+
+    ragpipe_url = os.environ.get("RAGPIPE_URL", "http://localhost:8090")
+    ragpipe_token = os.environ.get("RAGPIPE_ADMIN_TOKEN", "")
+
+    headers = {"Content-Type": "application/json"}
+    if ragpipe_token:
+        headers["Authorization"] = f"Bearer {ragpipe_token}"
+
+    payload = {
+        "model": "default",
+        "messages": [{"role": "user", "content": query}],
+        "temperature": 0,
+        "stream": False,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{ragpipe_url}/v1/chat/completions",
+                json=payload,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            meta = data.get("rag_metadata", {})
+
+            result = {
+                "messages": [
+                    AIMessage(content=content),
+                ],
+                "rag_metadata": meta,
+            }
+            log.info("Simple path: direct ragpipe call completed")
+            return result
+    except Exception as e:
+        log.warning("Simple path ragpipe call failed: %s", e)
+        raise
+
+
+async def _agentic_path(lc_messages: list) -> dict:
+    """Agentic path: run full LangGraph supervisor loop.
+
+    For COMPLEX and EXTERNAL queries that need multi-step reasoning.
+    """
+    graph = get_graph()
+    result = await graph.ainvoke({"messages": lc_messages})
+    log.info("Agentic path: full LangGraph loop completed")
+    return result
 
 
 def _extract_rag_metadata(messages) -> dict | None:
