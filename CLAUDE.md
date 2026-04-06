@@ -8,9 +8,8 @@ complexity routing.
 ```
 Client → ragorchestrator (:8095) → supervisor LLM
                                       ↓
-                              [ragpipe_retrieval tool]
-                                      ↓
-                              ragpipe (:8090) → corpus answer + citations
+                              [ragpipe_retrieval tool]  ←── corpus queries
+                              [web_search tool]         ←── real-time queries (optional)
                                       ↓
                               synthesis → response with rag_metadata
 ```
@@ -31,7 +30,8 @@ ragorchestrator/
   graph.py       — LangGraph supervisor graph, state schema, tool binding
   tools/
     __init__.py
-    ragpipe_tool.py — ragpipe wrapper as LangGraph tool
+    ragpipe_tool.py    — ragpipe wrapper as LangGraph tool
+    web_search_tool.py — Tavily web search (optional, needs TAVILY_API_KEY)
 tests/
   test_app.py    — API endpoint tests
   test_graph.py  — graph compilation tests
@@ -44,12 +44,16 @@ tests/
 - `RAGPIPE_URL`: ragpipe endpoint (default: http://localhost:8090)
 - `RAGPIPE_ADMIN_TOKEN`: Bearer token for ragpipe
 - `RAGORCHESTRATOR_PORT`: Listen port (default: 8095)
+- `TAVILY_API_KEY`: Tavily API key for web search (optional, tool disabled if unset)
+- `DISABLE_WEB_SEARCH`: Set to `true` to force-disable web search (sovereign/air-gapped mode)
 
 ## Running
 ```bash
-pip install '.[dev]'
-python -m ragorchestrator              # start server on :8095
-python -m pytest tests/ -v             # run tests
+pip install '.[dev]'                          # core only
+pip install '.[dev,web-search]'               # with Tavily web search
+TAVILY_API_KEY=tvly-... python -m ragorchestrator  # start with web search
+DISABLE_WEB_SEARCH=true python -m ragorchestrator  # force sovereign mode
+python -m pytest tests/ -v                    # run tests
 ```
 
 ## Endpoints

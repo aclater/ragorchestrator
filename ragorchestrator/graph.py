@@ -33,6 +33,7 @@ from langgraph.prebuilt import ToolNode
 from ragorchestrator.multipass import decompose_query, deduplicate_documents
 from ragorchestrator.reflection import ReflectionGrade, grade_answer, grade_hallucination
 from ragorchestrator.tools.ragpipe_tool import ragpipe_retrieval
+from ragorchestrator.tools.web_search_tool import get_web_search_tool
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +47,10 @@ For questions about internal documents, personnel, patents, defense analysis, or
 - Always call ragpipe_retrieval first
 - Use the returned answer and citations in your response
 - Preserve citation format [doc_id:chunk_id] exactly as returned
+
+If ragpipe_retrieval returns grounding='general' (no corpus match) and a web search tool is available:
+- Call the web search tool to find current information
+- Synthesize web results into a clear answer with source attribution
 
 For general knowledge questions (math, science, common facts):
 - Answer directly without calling tools
@@ -108,6 +113,20 @@ def _extract_question(messages) -> str:
     return ""
 
 
+def _build_tools():
+    """Build tool list with optional web search."""
+    tools = [ragpipe_retrieval]
+
+    web_search = get_web_search_tool()
+    if web_search:
+        tools.append(web_search)
+        log.info("Web search tool enabled (Tavily)")
+    else:
+        log.info("Web search tool disabled — ragpipe-only mode")
+
+    return tools
+
+
 def supervisor(state: AgentState) -> dict:
     messages = state["messages"]
     question = _extract_question(messages)
@@ -117,7 +136,7 @@ def supervisor(state: AgentState) -> dict:
     if not messages or not isinstance(messages[0], SystemMessage):
         messages = [SystemMessage(content=SUPERVISOR_PROMPT), *list(messages)]
 
-    tools = [ragpipe_retrieval]
+    tools = _build_tools()
     llm = _get_llm().bind_tools(tools)
     response = llm.invoke(messages)
     return {"messages": [response]}
@@ -272,7 +291,7 @@ def should_regenerate(state: AgentState) -> str:
 
 
 def build_graph():
-    tools = [ragpipe_retrieval]
+    tools = _build_tools()
     tool_node = ToolNode(tools)
 
     graph = StateGraph(AgentState)
