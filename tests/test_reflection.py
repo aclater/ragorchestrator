@@ -159,9 +159,11 @@ class TestReflectShortCircuit:
             ],
         }
 
+        mock_hall = AsyncMock(return_value=ReflectionGrade.GROUNDED)
+        mock_answer = AsyncMock(return_value=ReflectionGrade.USEFUL)
         with (
-            patch("ragorchestrator.graph.grade_hallucination", new_callable=AsyncMock, return_value=ReflectionGrade.GROUNDED) as mock_hall,
-            patch("ragorchestrator.graph.grade_answer", new_callable=AsyncMock, return_value=ReflectionGrade.USEFUL),
+            patch("ragorchestrator.graph.grade_hallucination", mock_hall),
+            patch("ragorchestrator.graph.grade_answer", mock_answer),
         ):
             result = await reflect(state)
             mock_hall.assert_called_once()
@@ -185,11 +187,13 @@ class TestReflectShortCircuit:
             ],
         }
 
+        mock_hall = AsyncMock(return_value=ReflectionGrade.GROUNDED)
+        mock_answer = AsyncMock(return_value=ReflectionGrade.USEFUL)
         with (
-            patch("ragorchestrator.graph.grade_hallucination", new_callable=AsyncMock, return_value=ReflectionGrade.GROUNDED) as mock_hall,
-            patch("ragorchestrator.graph.grade_answer", new_callable=AsyncMock, return_value=ReflectionGrade.USEFUL),
+            patch("ragorchestrator.graph.grade_hallucination", mock_hall),
+            patch("ragorchestrator.graph.grade_answer", mock_answer),
         ):
-            result = await reflect(state)
+            await reflect(state)
             mock_hall.assert_called_once()
 
     @pytest.mark.asyncio
@@ -203,9 +207,11 @@ class TestReflectShortCircuit:
             "messages": [HumanMessage(content="What is X?")],
         }
 
+        mock_hall = AsyncMock(return_value=ReflectionGrade.GROUNDED)
+        mock_answer = AsyncMock(return_value=ReflectionGrade.USEFUL)
         with (
-            patch("ragorchestrator.graph.grade_hallucination", new_callable=AsyncMock, return_value=ReflectionGrade.GROUNDED) as mock_hall,
-            patch("ragorchestrator.graph.grade_answer", new_callable=AsyncMock, return_value=ReflectionGrade.USEFUL),
+            patch("ragorchestrator.graph.grade_hallucination", mock_hall),
+            patch("ragorchestrator.graph.grade_answer", mock_answer),
         ):
-            result = await reflect(state)
+            await reflect(state)
             mock_hall.assert_called_once()
