@@ -1,7 +1,5 @@
 """Tests for the Self-RAG reflection module."""
 
-import pytest
-
 from ragorchestrator.reflection import ReflectionGrade
 
 
