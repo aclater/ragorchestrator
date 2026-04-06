@@ -11,7 +11,6 @@ When disabled, the tool is not registered with the supervisor graph,
 so the LLM never sees it as an option.
 """
 
-import json
 import logging
 import os
 

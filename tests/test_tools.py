@@ -10,6 +10,16 @@ from ragorchestrator.tools.ragpipe_tool import ragpipe_retrieval
 from ragorchestrator.tools.web_search_tool import _web_search_enabled, get_web_search_tool
 
 
+def _has_tavily() -> bool:
+    """Check if langchain-tavily is installed."""
+    try:
+        import langchain_tavily  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 @pytest.mark.asyncio
 async def test_ragpipe_tool_returns_json():
     """ragpipe_retrieval should return JSON with answer and metadata."""
@@ -93,6 +103,7 @@ class TestGetWebSearchTool:
         with patch.dict(os.environ, {}, clear=True):
             assert get_web_search_tool() is None
 
+    @pytest.mark.skipif(not _has_tavily(), reason="langchain-tavily not installed")
     def test_returns_tool_when_enabled(self):
         """get_web_search_tool should return a tool when enabled."""
         with patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}, clear=True):
@@ -102,6 +113,7 @@ class TestGetWebSearchTool:
 
 
 class TestGraphWithWebSearch:
+    @pytest.mark.skipif(not _has_tavily(), reason="langchain-tavily not installed")
     def test_graph_compiles_with_web_search(self):
         """Graph should compile when web search is enabled."""
         with (
