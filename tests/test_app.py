@@ -55,43 +55,21 @@ def test_sse_chunk_finish():
     assert data["choices"][0]["delta"] == {}
 
 
-def test_stream_simple_returns_sse(client):
-    """Streaming simple query should return text/event-stream."""
-    ragpipe_lines = [
-        'data: {"choices":[{"delta":{"content":"Hello"}}]}',
-        'data: {"choices":[{"delta":{"content":" world"}}]}',
-        "data: [DONE]",
-    ]
+def test_stream_true_returns_400(client):
+    """Streaming requests should return 400 with clear error message (fixes #22)."""
+    resp = client.post(
+        "/v1/chat/completions",
+        json={
+            "messages": [{"role": "user", "content": "who is adam"}],
+            "stream": True,
+        },
+    )
 
-    async def mock_aiter_lines():
-        for line in ragpipe_lines:
-            yield line
-
-    mock_response = AsyncMock()
-    mock_response.raise_for_status = lambda: None
-    mock_response.aiter_lines = mock_aiter_lines
-    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_response.__aexit__ = AsyncMock(return_value=False)
-
-    mock_client = AsyncMock()
-    mock_client.stream = lambda *args, **kwargs: mock_response
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("httpx.AsyncClient", return_value=mock_client):
-        resp = client.post(
-            "/v1/chat/completions",
-            json={
-                "messages": [{"role": "user", "content": "who is adam"}],
-                "stream": True,
-            },
-        )
-
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/event-stream")
-    body = resp.text
-    assert "data: " in body
-    assert "data: [DONE]" in body
+    assert resp.status_code == 400
+    data = resp.json()
+    assert "error" in data
+    assert data["error"]["code"] == "streaming_not_supported"
+    assert "not yet supported" in data["error"]["message"]
 
 
 def test_stream_false_returns_json(client):

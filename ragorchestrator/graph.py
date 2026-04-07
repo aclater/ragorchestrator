@@ -245,21 +245,6 @@ async def reflect(state: AgentState) -> dict:
     generation = state.get("generation", "")
     documents = state.get("documents", [])
     loop_count = state.get("loop_count", 0)
-    messages = state.get("messages", [])
-
-    # Short-circuit: if ragpipe classified grounding as "general", there are
-    # no corpus documents to grade against — skip the hallucination LLM call
-    # and go directly to re-retrieval.
-    grounding = _extract_grounding(messages)
-    if grounding == "general":
-        log.info("Self-RAG: grounding=general — skipping hallucination grader, triggering re-retrieval")
-        if loop_count >= MAX_RETRIES:
-            log.info("Self-RAG: max retries reached on general grounding")
-            return {"loop_count": loop_count + 1}
-        return {
-            "loop_count": loop_count + 1,
-            "messages": [AIMessage(content="[Self-RAG] Ragpipe grounding=general (no corpus match), re-retrieving...")],
-        }
 
     hallucination = await grade_hallucination(question, documents, generation)
     log.info("Self-RAG reflection: hallucination=%s", hallucination.value)
@@ -312,6 +297,18 @@ def should_use_multipass(state: AgentState) -> str:
     return "tools"
 
 
+def should_skip_reflect(state: AgentState) -> str:
+    """Skip reflection when ragpipe classified the query as general (no corpus match).
+
+    For grounding=general, the response is not corpus-based and re-grounding
+    checks are meaningless. Go directly to END.
+    """
+    grounding = _extract_grounding(state["messages"])
+    if grounding == "general":
+        return END
+    return "reflect"
+
+
 def should_regenerate(state: AgentState) -> str:
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and "[Self-RAG]" in last.content:
@@ -341,7 +338,8 @@ def build_graph():
 
     graph.add_edge("tools", "generate")
     graph.add_edge("multi_tools", "generate")
-    graph.add_edge("generate", "reflect")
+
+    graph.add_conditional_edges("generate", should_skip_reflect, {"reflect": "reflect", END: END})
 
     graph.add_conditional_edges(
         "reflect", should_regenerate, {"generate": "generate", "decompose": "decompose", END: END}

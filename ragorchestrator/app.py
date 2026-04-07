@@ -11,7 +11,7 @@ import time
 import uuid
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest
 
 from ragorchestrator import __version__
@@ -115,16 +115,17 @@ async def chat_completions(request: Request):
     model_name = body.get("model", "ragorchestrator")
 
     if stream:
-        if complexity == Complexity.SIMPLE:
-            return StreamingResponse(
-                _stream_simple_path(user_query, model_name, start, complexity.value),
-                media_type="text/event-stream",
-            )
-        else:
-            return StreamingResponse(
-                _stream_agentic_path(lc_messages, model_name, start, complexity.value),
-                media_type="text/event-stream",
-            )
+        return JSONResponse(
+            {
+                "error": {
+                    "message": "Streaming is not yet supported. "
+                    "Set 'stream': false and retry, or use ragpipe directly for streaming.",
+                    "type": "invalid_request_error",
+                    "code": "streaming_not_supported",
+                }
+            },
+            status_code=400,
+        )
 
     try:
         if complexity == Complexity.SIMPLE:

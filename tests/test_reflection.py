@@ -93,56 +93,6 @@ class TestExtractGrounding:
 
 class TestReflectShortCircuit:
     @pytest.mark.asyncio
-    async def test_short_circuits_on_grounding_general(self):
-        """reflect() should skip hallucination grader when grounding=general."""
-        state = {
-            "question": "What is the weather?",
-            "generation": "It is sunny.",
-            "documents": [],
-            "loop_count": 0,
-            "messages": [
-                HumanMessage(content="What is the weather?"),
-                ToolMessage(
-                    content=json.dumps({"grounding": "general", "answer": "It is sunny."}),
-                    name="ragpipe_retrieval",
-                    tool_call_id="tc1",
-                ),
-            ],
-        }
-
-        with patch("ragorchestrator.graph.grade_hallucination") as mock_hall:
-            result = await reflect(state)
-            mock_hall.assert_not_called()
-
-        assert result["loop_count"] == 1
-        assert "[Self-RAG]" in result["messages"][0].content
-        assert "re-retriev" in result["messages"][0].content.lower()
-
-    @pytest.mark.asyncio
-    async def test_short_circuit_respects_max_retries(self):
-        """reflect() should not re-retrieve when max retries reached on general grounding."""
-        state = {
-            "question": "What is the weather?",
-            "generation": "It is sunny.",
-            "documents": [],
-            "loop_count": 2,
-            "messages": [
-                ToolMessage(
-                    content=json.dumps({"grounding": "general", "answer": "x"}),
-                    name="ragpipe_retrieval",
-                    tool_call_id="tc1",
-                ),
-            ],
-        }
-
-        with patch("ragorchestrator.graph.grade_hallucination") as mock_hall:
-            result = await reflect(state)
-            mock_hall.assert_not_called()
-
-        assert result["loop_count"] == 3
-        assert "messages" not in result
-
-    @pytest.mark.asyncio
     async def test_no_short_circuit_on_corpus(self):
         """reflect() should call hallucination grader when grounding=corpus."""
         state = {
