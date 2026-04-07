@@ -12,7 +12,8 @@ Skip in CI (services not available):
     SKIP_LIVE_TESTS=1 pytest tests/test_live.py -v -m "not live"
 
 Known issues:
-- Complex/EXTERNAL queries fail with Connection error (issue #20) — agentic path bug
+- Complex/EXTERNAL queries hang indefinitely (issue #20) — agentic path bug, xfail tests expected
+- /v1/models endpoint not implemented in ragorchestrator (test marked xfail)
 """
 
 import os
@@ -55,11 +56,22 @@ class TestHealthAndConnectivity:
         assert "ragorchestrator_queries_total" in resp.text
         assert "# HELP" in resp.text or "ragorchestrator" in resp.text
 
-    def test_ragpipe_reachable(self):
+    def test_ragpipe_reachable_from_container(self):
         resp = httpx.get(f"{RAGPIPE_URL}/health", timeout=10)
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
+
+    @pytest.mark.xfail(
+        reason="ragorchestrator does not implement /v1/models — separate feature request needed",
+        strict=False,
+    )
+    def test_v1_models_returns_list(self):
+        resp = httpx.get(f"{RAGORCHESTRATOR_URL}/v1/models", timeout=10)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "data" in data
+        assert len(data["data"]) > 0
 
 
 class TestBasicChatCompletions:
@@ -93,7 +105,7 @@ class TestBasicChatCompletions:
         assert data["object"] == "chat.completion"
         assert "choices" in data
 
-    def test_simple_query_returns_answer(self):
+    def test_simple_query_returns_non_empty_answer(self):
         resp = self._chat("What is a patent?")
         assert resp.status_code == 200
         content = resp.json()["choices"][0]["message"]["content"]
@@ -192,7 +204,7 @@ class TestSelfRAGReflection:
         if "rag_metadata" in data:
             assert data["rag_metadata"].get("grounding") in ("general", "corpus", "mixed")
 
-    def test_reflection_fields_in_response(self):
+    def test_reflection_result_in_response(self):
         query = "What is a patent?"
         data = self._chat(query)
         content = data["choices"][0]["message"]["content"]
@@ -241,7 +253,7 @@ class TestMultiPassRetrieval:
 
     @pytest.mark.xfail(reason="Agentic path fails with Connection error — issue #20", strict=False)
     @pytest.mark.timeout(30)
-    def test_multipass_merges_results(self):
+    def test_multipass_returns_more_chunks(self):
         single_query = "What is a patent?"
         multi_query = (
             "Compare and contrast the patent systems in the US and Europe. "
@@ -276,7 +288,7 @@ class TestRagorchestratorVsRagpipe:
         assert resp.status_code == 200
         return resp.json()
 
-    def test_same_simple_query_same_answer(self):
+    def test_simple_query_equivalent_answers(self):
         query = "What is a patent?"
         orch_data = self._chat(RAGORCHESTRATOR_URL, query)
         pipe_data = self._chat(RAGPIPE_URL, query)
