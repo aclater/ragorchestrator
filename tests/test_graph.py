@@ -4,6 +4,7 @@ import json
 from unittest.mock import patch
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.graph import END
 
 from ragorchestrator.graph import AgentState, build_graph, should_skip_reflect
 
@@ -57,8 +58,6 @@ class TestShouldSkipReflect:
             "loop_count": 0,
         }
         result = should_skip_reflect(state)
-        from langgraph.graph import END
-
         assert result == END
 
     def test_corpus_grounding_enter_reflect(self):
