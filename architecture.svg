@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+  <style>
+    .box { stroke-width: 2; rx: 8; ry: 8; }
+    .simple { fill: #1a7f37; stroke: #1a7f37; }
+    .complex { fill: #9a6700; stroke: #9a6700; }
+    .node { fill: #0969da; stroke: #0969da; }
+    .reflect { fill: #8250df; stroke: #8250df; }
+    .external { fill: #cf222e; stroke: #cf222e; }
+    .service { fill: #656d76; stroke: #656d76; }
+    .label { fill: #fff; font-weight: bold; text-anchor: middle; dominant-baseline: central; }
+    .edge { stroke: #656d76; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .edge-simple { stroke: #1a7f37; stroke-width: 2; fill: none; marker-end: url(#arrow-simple); }
+    .edge-complex { stroke: #9a6700; stroke-width: 2; fill: none; marker-end: url(#arrow-complex); }
+    .edge-reflect { stroke: #8250df; stroke-width: 1.5; fill: none; stroke-dasharray: 6,3; marker-end: url(#arrow-reflect); }
+    .note { fill: #656d76; font-size: 10; font-style: italic; }
+    .title { fill: #1f2328; font-size: 18; font-weight: bold; }
+    @media (prefers-color-scheme: dark) {
+      .title { fill: #e6edf3; }
+      .note { fill: #8b949e; }
+      .edge { stroke: #8b949e; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#656d76"/></marker>
+    <marker id="arrow-simple" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1a7f37"/></marker>
+    <marker id="arrow-complex" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9a6700"/></marker>
+    <marker id="arrow-reflect" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8250df"/></marker>
+  </defs>
+
+  <text x="450" y="30" class="title" text-anchor="middle">ragorchestrator — LangGraph Supervisor Flow</text>
+
+  <!-- Client -->
+  <rect x="370" y="50" width="160" height="36" class="box service"/>
+  <text x="450" y="68" class="label">Client :8095</text>
+
+  <!-- Classifier -->
+  <rect x="370" y="120" width="160" height="36" class="box node"/>
+  <text x="450" y="138" class="label">classify(query)</text>
+  <path d="M 450 86 L 450 120" class="edge"/>
+
+  <!-- SIMPLE path -->
+  <rect x="100" y="200" width="160" height="36" class="box simple"/>
+  <text x="180" y="218" class="label">ragpipe (direct)</text>
+  <path d="M 390 156 L 180 200" class="edge-simple"/>
+  <text x="240" y="180" class="note">SIMPLE</text>
+
+  <!-- Response (simple) -->
+  <rect x="100" y="270" width="160" height="36" class="box simple"/>
+  <text x="180" y="288" class="label">response + metadata</text>
+  <path d="M 180 236 L 180 270" class="edge-simple"/>
+
+  <!-- COMPLEX/EXTERNAL path -->
+  <!-- Supervisor -->
+  <rect x="520" y="200" width="160" height="36" class="box node"/>
+  <text x="600" y="218" class="label">supervisor (LLM)</text>
+  <path d="M 510 156 L 600 200" class="edge-complex"/>
+  <text x="560" y="180" class="note">COMPLEX / EXTERNAL</text>
+
+  <!-- Decompose -->
+  <rect x="520" y="280" width="160" height="36" class="box node"/>
+  <text x="600" y="298" class="label">decompose</text>
+  <path d="M 600 236 L 600 280" class="edge-complex"/>
+  <text x="690" y="262" class="note">tool_calls?</text>
+
+  <!-- Tools (single) -->
+  <rect x="720" y="350" width="140" height="36" class="box node"/>
+  <text x="790" y="368" class="label">tools (single)</text>
+  <path d="M 640 316 L 790 350" class="edge"/>
+  <text x="730" y="332" class="note">1 query</text>
+
+  <!-- Multi-tools (parallel) -->
+  <rect x="390" y="350" width="160" height="36" class="box node"/>
+  <text x="470" y="368" class="label">multi_tools (parallel)</text>
+  <path d="M 560 316 L 470 350" class="edge"/>
+  <text x="490" y="332" class="note">2-3 queries</text>
+
+  <!-- ragpipe calls -->
+  <rect x="100" y="350" width="140" height="36" class="box service"/>
+  <text x="170" y="368" class="label">ragpipe :8090</text>
+  <path d="M 390 368 L 240 368" class="edge"/>
+
+  <!-- Generate -->
+  <rect x="520" y="430" width="160" height="36" class="box node"/>
+  <text x="600" y="448" class="label">generate (LLM)</text>
+  <path d="M 470 386 L 600 430" class="edge"/>
+  <path d="M 790 386 L 600 430" class="edge"/>
+
+  <!-- Reflect -->
+  <rect x="520" y="510" width="160" height="36" class="box reflect"/>
+  <text x="600" y="528" class="label">reflect (Self-RAG)</text>
+  <path d="M 600 466 L 600 510" class="edge"/>
+
+  <!-- Reflection outcomes -->
+  <!-- GROUNDED + USEFUL → END -->
+  <rect x="520" y="600" width="160" height="36" class="box simple"/>
+  <text x="600" y="618" class="label">response</text>
+  <path d="M 600 546 L 600 600" class="edge"/>
+  <text x="540" y="575" class="note">grounded + useful</text>
+
+  <!-- UNGROUNDED → regenerate -->
+  <path d="M 520 528 Q 440 528 440 448 Q 440 440 520 440" class="edge-reflect"/>
+  <text x="420" y="488" class="note" text-anchor="end">ungrounded</text>
+
+  <!-- NOT_USEFUL → re-retrieve -->
+  <path d="M 680 528 Q 780 528 780 298 Q 780 290 680 290" class="edge-reflect"/>
+  <text x="800" y="420" class="note">not useful</text>
+
+  <!-- Legend -->
+  <rect x="30" y="620" width="12" height="12" fill="#1a7f37" rx="2"/>
+  <text x="48" y="631" class="note" style="font-style: normal">Simple path</text>
+  <rect x="130" y="620" width="12" height="12" fill="#9a6700" rx="2"/>
+  <text x="148" y="631" class="note" style="font-style: normal">Complex path</text>
+  <rect x="240" y="620" width="12" height="12" fill="#8250df" rx="2"/>
+  <text x="258" y="631" class="note" style="font-style: normal">Self-RAG retry</text>
+  <rect x="350" y="620" width="12" height="12" fill="#656d76" rx="2"/>
+  <text x="368" y="631" class="note" style="font-style: normal">Internal edge</text>
+
+  <text x="450" y="680" class="note" text-anchor="middle">max 2 retries per query — loop_count enforced in reflect node</text>
+</svg>
