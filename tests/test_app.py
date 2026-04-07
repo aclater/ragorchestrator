@@ -185,3 +185,52 @@ def test_error_response_has_choices(client):
     assert "error" in data
     assert data["object"] == "chat.completion"
     assert data["id"].startswith("chatcmpl-")
+
+
+def test_complexity_field_in_response(client):
+    """Non-streaming response must include complexity field (fixes #21)."""
+    from langchain_core.messages import AIMessage
+
+    mock_result = {
+        "messages": [AIMessage(content="Paris is the capital of France.")],
+        "rag_metadata": {"grounding": "general"},
+    }
+
+    with patch("ragorchestrator.app._simple_path", new_callable=AsyncMock, return_value=mock_result):
+        resp = client.post(
+            "/v1/chat/completions",
+            json={
+                "messages": [{"role": "user", "content": "what is the capital of France"}],
+                "stream": False,
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "complexity" in data, "Response missing complexity field"
+    assert data["complexity"] == "simple"
+
+
+def test_complexity_field_complex_query(client):
+    """Complex queries should show complexity=complex in response (fixes #21)."""
+    from langchain_core.messages import AIMessage
+
+    mock_result = {
+        "messages": [AIMessage(content="Comparing NATO and patent law...")],
+    }
+
+    with patch("ragorchestrator.app._agentic_path", new_callable=AsyncMock, return_value=mock_result):
+        resp = client.post(
+            "/v1/chat/completions",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Compare and analyze NATO Article 5 with patent claims requirements"}
+                ],
+                "stream": False,
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "complexity" in data
+    assert data["complexity"] == "complex"
