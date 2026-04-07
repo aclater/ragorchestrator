@@ -46,6 +46,13 @@ curl http://localhost:8095/v1/chat/completions \
 | `RAGPIPE_URL` | `http://localhost:8090` | ragpipe endpoint |
 | `RAGPIPE_ADMIN_TOKEN` | | Bearer token for ragpipe |
 | `RAGORCHESTRATOR_PORT` | `8095` | Listen port |
+| `TAVILY_API_KEY` | | Tavily API key for web search (optional) |
+| `DISABLE_WEB_SEARCH` | | Set to `true` to force-disable web search (sovereign mode) |
+
+## Known limitations
+
+- **Streaming not supported**: The `/v1/chat/completions` endpoint always returns a complete response. Streaming responses are not yet implemented.
+- **Web search requires API key**: The `TAVILY_API_KEY` environment variable must be set to enable web search functionality. Without it, the web search tool is disabled.
 
 ## Health and metrics
 
