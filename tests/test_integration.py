@@ -34,11 +34,13 @@ def live_service():
 
 def _chat(query: str, timeout: int = 120) -> dict:
     """Send a chat completion request to the live ragorchestrator."""
-    payload = json.dumps({
-        "model": "default",
-        "messages": [{"role": "user", "content": query}],
-        "stream": False,
-    }).encode()
+    payload = json.dumps(
+        {
+            "model": "default",
+            "messages": [{"role": "user", "content": query}],
+            "stream": False,
+        }
+    ).encode()
 
     req = urllib.request.Request(
         f"{RAGORCHESTRATOR_URL}/v1/chat/completions",
