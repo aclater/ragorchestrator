@@ -116,3 +116,23 @@ def test_stream_false_returns_json(client):
     data = resp.json()
     assert "choices" in data
     assert data["choices"][0]["message"]["content"] == "test answer"
+
+
+def test_error_response_has_choices(client):
+    """Error responses should still include choices array for OpenAI compatibility."""
+    with patch("ragorchestrator.app._simple_path", new_callable=AsyncMock, side_effect=Exception("test error")):
+        resp = client.post(
+            "/v1/chat/completions",
+            json={
+                "messages": [{"role": "user", "content": "who is adam"}],
+                "stream": False,
+            },
+        )
+
+    assert resp.status_code == 500
+    data = resp.json()
+    assert "choices" in data, f"Error response missing 'choices': {data}"
+    assert data["choices"][0]["message"]["role"] == "assistant"
+    assert "error" in data
+    assert data["object"] == "chat.completion"
+    assert data["id"].startswith("chatcmpl-")

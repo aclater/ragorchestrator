@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 
 log = logging.getLogger(__name__)
 
-MODEL_URL = os.environ.get("MODEL_URL", "http://localhost:8080")
+MODEL_URL = os.environ.get("MODEL_URL", "http://127.0.0.1:8080")
 MODEL_NAME = os.environ.get("MODEL_NAME", "model.file")
 MAX_SUB_QUERIES = 3
 

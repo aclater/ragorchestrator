@@ -175,7 +175,25 @@ async def chat_completions(request: Request):
         query_latency.observe(elapsed)
         queries_total.labels(status="error").inc()
         log.exception("Query processing failed")
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return JSONResponse(
+            {
+                "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+                "object": "chat.completion",
+                "model": model_name,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": f"I encountered an error processing your request: {e}",
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "error": str(e),
+            },
+            status_code=500,
+        )
 
 
 def _sse_chunk(chunk_id: str, model: str, content: str, finish_reason: str | None = None) -> str:
