@@ -39,6 +39,9 @@ select = ["E", "F", "W", "I", "UP", "RUF"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "live: tests that hit live services (skip unless --live flag is passed)",
+]
 
 [tool.mypy]
 python_version = "3.11"
