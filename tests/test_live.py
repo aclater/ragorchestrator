@@ -8,6 +8,9 @@ Run with:
         --ragorchestrator-url=http://localhost:8095 \
         --ragpipe-url=http://localhost:8090
 
+Skip in CI (services not available):
+    SKIP_LIVE_TESTS=1 pytest tests/test_live.py -v -m "not live"
+
 Known issues:
 - Complex/EXTERNAL queries fail with Connection error (issue #20) — agentic path bug
 """
@@ -20,6 +23,22 @@ import pytest
 RAGORCHESTRATOR_URL = os.environ.get("RAGORCHESTRATOR_URL", "http://localhost:8095")
 RAGPIPE_URL = os.environ.get("RAGPIPE_URL", "http://localhost:8090")
 TIMEOUT = 120.0
+
+
+def _is_live_stack_available() -> bool:
+    """Check if the live stack (ragorchestrator + ragpipe) is reachable."""
+    try:
+        httpx.get(f"{RAGORCHESTRATOR_URL}/health", timeout=5)
+        httpx.get(f"{RAGPIPE_URL}/health", timeout=5)
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("SKIP_LIVE_TESTS") == "1" or not _is_live_stack_available(),
+    reason="Live stack not available — set SKIP_LIVE_TESTS=1 to skip",
+)
 
 
 class TestHealthAndConnectivity:
