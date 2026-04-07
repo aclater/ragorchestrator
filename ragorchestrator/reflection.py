@@ -13,7 +13,7 @@ from enum import Enum
 
 from langchain_openai import ChatOpenAI
 
-MODEL_URL = os.environ.get("MODEL_URL", "http://localhost:8080")
+MODEL_URL = os.environ.get("MODEL_URL", "http://127.0.0.1:8080")
 MODEL_NAME = os.environ.get("MODEL_NAME", "model.file")
 
 
