@@ -117,12 +117,12 @@ async def chat_completions(request: Request):
     if stream:
         if complexity == Complexity.SIMPLE:
             return StreamingResponse(
-                _stream_simple_path(user_query, model_name, start),
+                _stream_simple_path(user_query, model_name, start, complexity.value),
                 media_type="text/event-stream",
             )
         else:
             return StreamingResponse(
-                _stream_agentic_path(lc_messages, model_name, start),
+                _stream_agentic_path(lc_messages, model_name, start, complexity.value),
                 media_type="text/event-stream",
             )
 
@@ -165,6 +165,8 @@ async def chat_completions(request: Request):
             ],
         }
 
+        response["complexity"] = complexity.value
+
         if rag_metadata:
             response["rag_metadata"] = rag_metadata
 
@@ -195,7 +197,7 @@ def _sse_chunk(chunk_id: str, model: str, content: str, finish_reason: str | Non
     return f"data: {json.dumps(data)}\n\n"
 
 
-async def _stream_simple_path(query: str, model: str, start: float):
+async def _stream_simple_path(query: str, model: str, start: float, complexity: str = "simple"):
     """Stream SSE events by proxying ragpipe's streaming response."""
     import httpx
 
@@ -250,10 +252,11 @@ async def _stream_simple_path(query: str, model: str, start: float):
         yield _sse_chunk(chunk_id, model, f"\n\n[Error: {e}]")
 
     yield _sse_chunk(chunk_id, model, "", finish_reason="stop")
+    yield f"data: {json.dumps({'complexity': complexity})}\n\n"
     yield "data: [DONE]\n\n"
 
 
-async def _stream_agentic_path(lc_messages: list, model: str, start: float):
+async def _stream_agentic_path(lc_messages: list, model: str, start: float, complexity: str = "complex"):
     """Run agentic graph, then stream the final content as SSE chunks."""
     chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
 
@@ -288,6 +291,7 @@ async def _stream_agentic_path(lc_messages: list, model: str, start: float):
         yield _sse_chunk(chunk_id, model, f"Error: {e}")
 
     yield _sse_chunk(chunk_id, model, "", finish_reason="stop")
+    yield f"data: {json.dumps({'complexity': complexity})}\n\n"
     yield "data: [DONE]\n\n"
 
 
