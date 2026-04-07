@@ -185,4 +185,3 @@ def test_error_response_has_choices(client):
     assert "error" in data
     assert data["object"] == "chat.completion"
     assert data["id"].startswith("chatcmpl-")
-
