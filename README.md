@@ -1,3 +1,5 @@
+> **Archived on 2026-10-15.** This repo is part of the original RAG suite (April 2026) and is no longer maintained. It has been superseded by a rebuild: **[aclater/rag](https://github.com/aclater/rag)**.
+
 # ragorchestrator
 
 LangGraph supervisor agent for [ragpipe](https://github.com/aclater/ragpipe) — agentic RAG orchestration with adaptive complexity routing, multi-pass retrieval, and Self-RAG reflection.
